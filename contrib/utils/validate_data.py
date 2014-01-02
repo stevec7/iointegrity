@@ -12,6 +12,7 @@ def main(options, args):
     fmd5 = FileMD5()
     date = datetime.datetime.now().isoformat()
 
+    # get all file data from the database
     data = iodb.get_all_file_info()
 
     print "Checking data integrity..."
