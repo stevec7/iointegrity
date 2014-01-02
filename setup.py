@@ -7,11 +7,10 @@ except:
     
 setup(
     name = 'iointegrity',
-    version = '0.0.1',
+    version = '0.1.0',
     description = 'libraries and tools to check iointegrity',
     author = 'stevec7',
     author_email = 'none',
-    #packages = ['iointegrity', 'mpi4py', 'sqlite3']
     packages = ['iointegrity']
 
 
