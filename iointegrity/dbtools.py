@@ -7,7 +7,7 @@ import sqlite3 as sql
 import sys
 
 class IOIntegrityDB(object):
-    '''The only functions of this class is to send and retrieve
+    '''The only function of this class is to send and retrieve
        data from the database. Nothing more...'''
     def __init__(self, dbname, tablename='fileintegrity'):
         # setup db connections

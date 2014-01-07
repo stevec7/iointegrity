@@ -29,7 +29,7 @@ def main(options, args):
 
     # 2.) block maps of each file
     for p in pairs:
-        m = pickle.marshal.dumps(bmd5.createmap(p[1]))
+        m = pickle.marshal.dumps(bmd5.create_map(p[1]))
         data.append((p[1], p[0], m, '', datestr))
 
     # 3.) on disk location of data
