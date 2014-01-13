@@ -1,4 +1,5 @@
 import hashlib
+import logging
 import os
 import tempfile
 import pickle
@@ -66,7 +67,11 @@ class BlockMD5(object):
             return True
 
 class FileMD5(object):
-    def __init__(self):
+    def __init__(self, loglvl='info'):
+        if loglvl == 'verbose':
+            logging.basicConfig(format='%(message)s', level=logging.DEBUG)
+        else:
+            logging.basicConfig(format='%(message)s', level=logging.INFO)
         return None
 
     def create_md5(self, name):
@@ -76,8 +81,7 @@ class FileMD5(object):
         return md5sum
 
     def validate_md5(self, name, md5sum):
-        logging.debug("Opening '{0}' to check md5sum".format(name))
-        print "Opening '{0}' to check md5sum".format(name)
+        logging.debug("DEBUG: FileMD5().validate_md5({0}, {1})".format(name, md5sum))
         with open(name, 'r') as f:
             current_md5 = hashlib.md5(f.read()).hexdigest()
 
