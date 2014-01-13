@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import logging
 import os
+import pickle
 import sys
 from mpi4py import MPI
 from optparse import OptionParser
@@ -30,6 +31,8 @@ def master(comm, options):
     iodb = IOIntegrityDB(options.db)    
     data = iodb.get_all_file_info()
 
+    bad_blocks = []
+
     # if num_ranks is 1, then we exit...
     if num_ranks == 1:
         print "Need more than 1 rank Ted..."
@@ -39,16 +42,20 @@ def master(comm, options):
         # wait for another rank to report in
         child = comm.recv(source=MPI.ANY_SOURCE)
 
+        logging.debug("Master: Received: {0}".format(child))
+
         # send file data to this rank
         if child:
             logging.debug("Sending '{0}' to rank: '{1}'".format(
                     d['name'], child))
-            comm.send(d, dest=child)
+            # tag=2 means we are sending more data
+            comm.send(dict(d), dest=child, tag=2)
 
     # ran out of files to create. tell ranks we're done
     i = 1
     while i < num_ranks:
         child = comm.recv(source=MPI.ANY_SOURCE)
+        logging.debug("Master: Received: {0}".format(child))
         comm.send('alldone', dest=child)
         i += 1
         
@@ -64,23 +71,26 @@ def slave(comm, options):
 
     while not done:
         comm.send(rank, dest=0)
-        d = comm.recv(source=0)
+        d = comm.recv(source=0, tag=2)
+
+        logging.debug("Rank: {0}, received: {1}".format(rank, d))
 
         if d == 'alldone':
             done = True
         else:
             is_clean = fmd5.validate_md5(d['name'], d['md5sum'])
-            logging.debug("File '{0}' is clean? {1}".format(d['name'], is_clean))
 
             if is_clean is not True:
-                #print "File '{0}' doesn't match md5sum in database".format(name)
-                #print "Doing block-level map check..."
+                logging.debug("Rank: {0}, Bad_blocks: {1}".format(
+                            rank, d['name']))
                 map = pickle.marshal.loads(d['chunks'])
                 block_check = blk.validate_map(d['name'], map)
                 if block_check is not True:
-                    print "Offset, Map_md5, Current_md5"
-                    for b in block_check[1]:
-                        print b 
+                    #for b in block_check[1]:
+                    #    print d['name'], b 
+                    #comm.send(block_check, dest=0)
+                    buf = ( d['name'], block_check )
+                    comm.send(buf, dest=0, tag=1)
             done = False
     return
 
