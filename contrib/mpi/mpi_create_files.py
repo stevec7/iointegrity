@@ -40,6 +40,8 @@ def master(comm, options):
         # wait for another rank to report in
         child = comm.recv(source=MPI.ANY_SOURCE)
 
+        logging.verbose("Rank {0} reported in, sending: {1}".format(child, f))
+
         # send filename to this rank
         if child:
             comm.send(f, dest=child)
