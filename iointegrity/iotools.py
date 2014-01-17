@@ -3,6 +3,9 @@ import logging
 import os
 import tempfile
 import pickle
+import random
+import shutil
+import string
 import sys
 
 class BlockMD5(object):
@@ -93,32 +96,43 @@ class FileMD5(object):
 class FileTree(object):
     def __init__(self, topdir, num_top_dirs=1, num_sub_dirs=0, 
             third_level_dirs=0, files_per_dir=1, max_size=8192, 
-            aligned=True, stats=False, suffix=''):
+            aligned=True, stats=False, suffix='', loglvl='info'):
         '''Set the configuration'''
         self.root = topdir
         vfsstats = os.statvfs(self.root)
         self.bufsize = vfsstats.f_bsize
         self.num_top_dirs = num_top_dirs
         self.num_sub_dirs = num_sub_dirs
+        self.third_level_dirs = third_level_dirs
         self.max_size = max_size
         self.files_per_dir = files_per_dir
         self.aligned = aligned
         self.stats = stats
         self.suffix = suffix
 
+        # set logging
+        if loglvl == 'verbose':
+            logging.basicConfig(format='%(message)s', level=logging.DEBUG)
+        else:
+            logging.basicConfig(format='%(message)s', level=logging.INFO)
+
         return None
 
     def _free_space(self, num_bytes):
         '''Checks to see if there is enough space on the filesystem'''
-        vfsstats = os.path.dirname(os.path.abspath(self.root))
+        vfsstats = os.statvfs(os.path.dirname(os.path.abspath(self.root)))
 
-        if num_bytes > (vfsstats.f_ffree * vfsstats.f_bfree):
+        bytes_free = vfsstats.f_ffree * vfsstats.f_bfree
+        logging.debug("DEBUG: Bytes_to_write: {0}, Bytes_Free: {1}".format(
+                    num_bytes, bytes_free))
+        print "Bytes_to_write: {0}, Bytes_Free: {1}".format(num_bytes, bytes_free)
+        if num_bytes > bytes_free:
             return False
         
         return True
 
-    def _gen_all_dirs(self):
-        '''Create the directory hierarchy all at once'''
+    def _gen_dir_array(self):
+        '''Generate the directory hierarchy array all at once'''
         # make an array of directory paths
         self.dirs = []
 
@@ -134,7 +148,7 @@ class FileTree(object):
                     dirname = dirname + '/' + str(subsubdir)
                     self.dirs.append(dirname)
 
-        return dirs
+        return
 
     def _path_exists(self, filepath):
         '''Checks to see if the path exists'''
@@ -142,41 +156,101 @@ class FileTree(object):
             return False
 
         return True
-       
 
-    def write_file(self, filepath):       
+    def _random_name(self, size=10, chars=string.ascii_lowercase + string.digits):
+        '''return a random name'''
+        rname = ''.join(random.choice(chars) for x in range(size))
+        rname += self.suffix
+        return rname
+
+    def queue_walk_tree(self, path, tasks=2):
+        '''import modules we wouldn't have normally used'''
+        #import multiprocessing
+        return
+
+    def serial_create_dir_tree(self):
+        '''Create a directory tree'''
+        for d in self.dirs:
+           if not os.path.exists(d):
+               os.makedirs(d)
+           
+        return
+
+    def serial_delete_dirs(self):
+        '''Delete the FileTree root dir'''
+        for d in self.dirs:
+           if os.path.exists(d):
+               shutil.rmtree(d)
+
+        return
+
+    def serial_populate_dir_tree(self):
+        '''Write data files in serial to the directory tree'''
+        for d in self.dirs:
+            for f in range(0, self.files_per_dir):
+                name = self._random_name()
+                filename = d + '/' + name
+                result, err = self.write_file(filename)
+                if not result:
+                    print err
+                    break
+
+        return
+
+    def walk_tree_generator(self, path):
+        '''
+        Returns a generator that can be used to walk a directory
+        tree
+
+        You can then make a list of all files via:
+        files = []
+        for dir in walk:
+            for f in dir[2]:
+                files.append("{0}/{1}".format(dir[0], f))
+
+        Then use that for whatever...
+        '''
+        walk = os.walk(path)
+        return walk
+
+    def write_file(self, filename):       
         '''Create a number of random files in a directory tree of varying size'''
-        # pick a random bytesize between 0 and max_size
+        # the number of bytes written is a multiple of the fs blocksize
         if self.aligned:
             num_bytes = random.randrange(self.bufsize, 
                     stop=self.max_size, step=self.bufsize)
+        # pick a random bytesize between 0 and max_size
         else:
             num_bytes = random.randrange(1, self.max_size)
 
         # check to see if enough space is available
         if not self._free_space(num_bytes):
-            return "Not enough space to write data."
+            return False, "Not enough space to write data."
         
         # check to see if path exists
-        if not self._path_exists(filepath):
-            return "Directory does not exist."
+        if not self._path_exists(filename):
+            return False, "Directory does not exist."
         
         # figure out how many chunks we need to write
         bytes_left = num_bytes
 
-        # add the suffix if specified
-        filepath = filepath+self.suffix
-
         # write out the random data
-        with open(filepath, 'wb') as f:
-            while bytes_left > 0: 
-                if bytes_left < self.bufsize:
-                    f.write(os.urandom(bytes_left))
-                    bytes_left -= bufsize
-                else:
-                    f.write(os.urandom(bufsize))
-                    bytes_left -= bufsize
-        return
+        logging.debug("DEBUG: Writing file: {0}".format(filename))
+        with open(filename, 'wb') as f:
+            try:
+                while bytes_left > 0: 
+                    if bytes_left < self.bufsize:
+                        f.write(os.urandom(bytes_left))
+                        bytes_left -= self.bufsize
+                    else:
+                        f.write(os.urandom(self.bufsize))
+                        bytes_left -= self.bufsize
+            except IOError as ioe:
+                print "IOError: {0}".format(ioe)
+                print "We bail on IO Errors..."
+                sys.exit(1)
+
+        return True, "Success"
 
 # for when you don't want to use the FileTree class, 
 #   and simply want to create a random file
