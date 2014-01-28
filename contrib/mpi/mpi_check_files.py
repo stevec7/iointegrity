@@ -55,7 +55,7 @@ def master(comm, options):
     i = 1
     while i < num_ranks:
         child = comm.recv(source=MPI.ANY_SOURCE)
-        logging.debug("Master: Received: {0}".format(child))
+        logging.debug("Master_Done: Received: {0}".format(child))
         comm.send('alldone', dest=child)
         i += 1
         
