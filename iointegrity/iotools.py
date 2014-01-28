@@ -94,61 +94,49 @@ class FileMD5(object):
             return True
 
 class FileTree(object):
-    def __init__(self, topdir, num_top_dirs=1, num_sub_dirs=0, 
-            third_level_dirs=0, files_per_dir=1, max_size=8192, 
-            aligned=True, stats=False, suffix='', loglvl='info'):
-        '''Set the configuration'''
-        self.root = topdir
-        vfsstats = os.statvfs(self.root)
+    def __init__(self):
+        '''Set defaults'''
+        self.aligned = True
+        self.dirs_per_level = 1
+        self.files_per_dir = 1
+        self.fixed_size = False
+        self.loglvl = 'info'
+        self.max_size = 8192
+        self.num_levels = 1
+        self.stats = False
+        self.suffix = ''
+        self.topdir = None
+
+        return None
+
+    def set_config(self, kwargs):
+        '''Set class configuration'''
+        for k, v in kwargs.items():
+            setattr(self, k, v)
+
+        # get the blocksize
+        vfsstats = os.statvfs(self.topdir)
         self.bufsize = vfsstats.f_bsize
-        self.num_top_dirs = num_top_dirs
-        self.num_sub_dirs = num_sub_dirs
-        self.third_level_dirs = third_level_dirs
-        self.max_size = max_size
-        self.files_per_dir = files_per_dir
-        self.aligned = aligned
-        self.stats = stats
-        self.suffix = suffix
 
         # set logging
-        if loglvl == 'verbose':
+        if self.loglvl == 'verbose' or self.loglvl == 'debug':
             logging.basicConfig(format='%(message)s', level=logging.DEBUG)
         else:
             logging.basicConfig(format='%(message)s', level=logging.INFO)
 
-        return None
+        return
 
     def _free_space(self, num_bytes):
         '''Checks to see if there is enough space on the filesystem'''
-        vfsstats = os.statvfs(os.path.dirname(os.path.abspath(self.root)))
+        vfsstats = os.statvfs(os.path.dirname(os.path.abspath(self.topdir)))
 
         bytes_free = vfsstats.f_ffree * vfsstats.f_bfree
         logging.debug("DEBUG: Bytes_to_write: {0}, Bytes_Free: {1}".format(
                     num_bytes, bytes_free))
-        print "Bytes_to_write: {0}, Bytes_Free: {1}".format(num_bytes, bytes_free)
         if num_bytes > bytes_free:
             return False
         
         return True
-
-    def _gen_dir_array(self):
-        '''Generate the directory hierarchy array all at once'''
-        # make an array of directory paths
-        self.dirs = []
-
-        # if I was cool, I'd do some crazy algorithm or list comprehension
-        for topdir in range(0, self.num_top_dirs):
-            dirname = self.root + '/' + str(topdir)
-            self.dirs.append(dirname)
-            for subdir in range(0, self.num_sub_dirs):
-                dirname = self.root + '/' + str(topdir) + '/'+str(subdir)
-                self.dirs.append(dirname)
-                for subsubdir in range(0, self.third_level_dirs):
-                    dirname = self.root + '/' + str(topdir) + '/' + str(subdir)
-                    dirname = dirname + '/' + str(subsubdir)
-                    self.dirs.append(dirname)
-
-        return
 
     def _path_exists(self, filepath):
         '''Checks to see if the path exists'''
@@ -157,16 +145,42 @@ class FileTree(object):
 
         return True
 
-    def _random_name(self, size=10, chars=string.ascii_lowercase + string.digits):
-        '''return a random name'''
-        rname = ''.join(random.choice(chars) for x in range(size))
-        rname += self.suffix
-        return rname
+    def _sub_tree(self, path, levels, dirs_per_level):
+        '''should be called recursively to generate names of levels of dirs'''
+        for n in range(dirs_per_level):
+            dirname = "L{0}D{1}".format(levels, n)
+            newdir = os.path.join(path, dirname)
+            self.dirs.append(newdir)
+            for nl in range(levels):
+                self._sub_tree(newdir, nl, dirs_per_level)
+
+    def gen_dir_array(self, topdir, levels, dirs_per_level):
+        '''Generate the directory hierarchy array all at once
+            
+            I won't lie, I'm basically recreating (poor attempt anyway) 
+            fdtree in Python:
+            https://computing.llnl.gov/?set=code&page=sio_downloads
+        '''
+        # make an array of directory paths
+        self.dirs = []
+
+        # this will start recursively calling itself until
+        #   you've reached the end (num_levels)
+        self._sub_tree(topdir, levels, dirs_per_level)
+
+        return
 
     def queue_walk_tree(self, path, tasks=2):
         '''import modules we wouldn't have normally used'''
         #import multiprocessing
         return
+
+    def random_name(self, size=10, chars=string.ascii_lowercase + string.digits):
+        '''return a random name'''
+        rname = ''.join(random.choice(chars) for x in range(size))
+        rname += self.suffix
+        return rname
+
 
     def serial_create_dir_tree(self):
         '''Create a directory tree'''
@@ -187,9 +201,9 @@ class FileTree(object):
     def serial_populate_dir_tree(self):
         '''Write data files in serial to the directory tree'''
         for d in self.dirs:
-            for f in range(0, self.files_per_dir):
-                name = self._random_name()
-                filename = d + '/' + name
+            for f in range(self.files_per_dir):
+                name = self.random_name()
+                filename = os.path.join(d, name)
                 result, err = self.write_file(filename)
                 if not result:
                     print err
@@ -216,7 +230,9 @@ class FileTree(object):
     def write_file(self, filename):       
         '''Create a number of random files in a directory tree of varying size'''
         # the number of bytes written is a multiple of the fs blocksize
-        if self.aligned:
+        if self.fixed_size:
+            num_bytes = self.max_size
+        elif self.aligned and not self.fixed_size:
             num_bytes = random.randrange(self.bufsize, 
                     stop=self.max_size, step=self.bufsize)
         # pick a random bytesize between 0 and max_size
@@ -235,7 +251,8 @@ class FileTree(object):
         bytes_left = num_bytes
 
         # write out the random data
-        logging.debug("DEBUG: Writing file: {0}".format(filename))
+        logging.debug("DEBUG: {0}.{1}(): Writing file: {2}".format(
+                    self.__class__.__name__, self.write_file.__name__, filename))
         with open(filename, 'wb') as f:
             try:
                 while bytes_left > 0: 
