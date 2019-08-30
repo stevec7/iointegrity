@@ -50,6 +50,11 @@ class IOIntegrityDB(object):
 
         return mapd
 
+    def mass_insert_filemd5(self, data):
+        self.sqlrun.executemany('INSERT INTO fileintegrity VALUES(?, ?, ?, ?, ?)', data)
+        self.sqlconn.commit()
+        return
+
     def write_blockmd5_to_db(self, name, mapd):
         '''Writes map data to the database'''
         block_data = marshal.dumps(mapd)
