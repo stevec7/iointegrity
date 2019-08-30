@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 import logging
+import marshal
 import os
-import pickle
 import sys
 from mpi4py import MPI
 from optparse import OptionParser
@@ -15,6 +15,8 @@ def main(options, args):
     # setup logging
     if options.verbose:
         logging.basicConfig(format='%(message)s', level=logging.DEBUG)
+    else:
+        logging.basicConfig(format='%(message)s', level=logging.INFO)
 
     if rank == 0:
         # do the master
@@ -22,6 +24,9 @@ def main(options, args):
     else:
         # secondary stuff
         slave(comm, options)
+
+    MPI.Finalize()
+    return
 
 def master(comm, options):
     '''rank 0 will handle the program setup, and distribute
@@ -35,30 +40,20 @@ def master(comm, options):
 
     # if num_ranks is 1, then we exit...
     if num_ranks == 1:
-        print "Need more than 1 rank Ted..."
+        print("Need more than 1 rank Ted...")
         comm.Abort(1)
 
-    for d in data:
-        # wait for another rank to report in
-        child = comm.recv(source=MPI.ANY_SOURCE)
+    # split into chunks since mpi4py's scatter cannot take a size arg
+    chunks = [[] for _ in range(comm.Get_size())]
+    for e, chunk in enumerate(data):
+        chunks[e % comm.Get_size()].append(dict(chunk))
 
-        logging.debug("Master: Received: {0}".format(child))
+    rc = comm.scatter(chunks)
+    results = {}
+    results = comm.gather(results, root=0)
 
-        # send file data to this rank
-        if child:
-            logging.debug("Sending '{0}' to rank: '{1}'".format(
-                    d['name'], child))
-            # tag=2 means we are sending more data
-            comm.send(dict(d), dest=child, tag=2)
-
-    # ran out of files to create. tell ranks we're done
-    i = 1
-    while i < num_ranks:
-        child = comm.recv(source=MPI.ANY_SOURCE)
-        logging.debug("Master_Done: Received: {0}".format(child))
-        comm.send('alldone', dest=child)
-        i += 1
-        
+    for rank, r in enumerate(results):
+        logging.info("Rank: {}, Results: {}".format(rank, r))
     return
 
 def slave(comm, options):
@@ -69,29 +64,25 @@ def slave(comm, options):
     fmd5 = FileMD5()
     blk = BlockMD5()
 
-    while not done:
-        comm.send(rank, dest=0)
-        d = comm.recv(source=0, tag=2)
+    data = {}
+    results = {}
+    data = comm.scatter(data, root=0)
 
-        logging.debug("Rank: {0}, received: {1}".format(rank, d))
+    for d in data:
+        is_clean = fmd5.validate_md5(d['name'], d['md5sum'])
 
-        if d == 'alldone':
-            done = True
-        else:
-            is_clean = fmd5.validate_md5(d['name'], d['md5sum'])
+        if is_clean is not True:
+            logging.debug("Rank: {0}, Bad_blocks: {1}".format(
+                        rank, d['name']))
+            mapd = marshal.loads(d['chunks'])
+            block_check = blk.validate_map(d['name'], mapd)
+            if block_check is not True:
+                #for b in block_check[1]:
+                #    print d['name'], b 
+                #comm.send(block_check, dest=0)
+                results[d['name']] = block_check[1]
 
-            if is_clean is not True:
-                logging.debug("Rank: {0}, Bad_blocks: {1}".format(
-                            rank, d['name']))
-                map = pickle.marshal.loads(d['chunks'])
-                block_check = blk.validate_map(d['name'], map)
-                if block_check is not True:
-                    #for b in block_check[1]:
-                    #    print d['name'], b 
-                    #comm.send(block_check, dest=0)
-                    buf = ( d['name'], block_check )
-                    comm.send(buf, dest=0, tag=1)
-            done = False
+    results = comm.gather(results, root=0)
     return
 
 if __name__ == '__main__':
@@ -99,7 +90,7 @@ if __name__ == '__main__':
     parser.add_option('-d', '--db',
                     dest='db',
                     type='str',
-                    help='database file to openi.')
+                    help='database file to open.')
     parser.add_option('-v', '--verbose',
                     action='store_true',
                     dest='verbose',

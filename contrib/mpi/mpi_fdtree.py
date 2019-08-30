@@ -44,7 +44,7 @@ def master(comm, options):
 
     # if num_ranks is 1, then we exit...
     if num_ranks == 1:
-        print "Need more than 1 rank Ted..."
+        print("Need more than 1 rank Ted...")
         comm.Abort(1)
 
     for f in files:

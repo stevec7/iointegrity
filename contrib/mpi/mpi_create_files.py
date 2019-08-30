@@ -13,6 +13,8 @@ def main(options, args):
     # setup logging
     if options.verbose:
         logging.basicConfig(format='%(message)s', level=logging.DEBUG)
+    else:
+        logging.basicConfig(format='%(message)s', level=logging.INFO)
 
     if rank == 0:
         # do the master
@@ -33,41 +35,37 @@ def master(comm, options):
 
     # if num_ranks is 1, then we exit...
     if num_ranks == 1:
-        print "Need more than 1 rank Ted..."
+        print("Need more than 1 rank Ted...")
         comm.Abort(1)
 
-    for f in files:
-        # wait for another rank to report in
-        child = comm.recv(source=MPI.ANY_SOURCE)
+	# split into chunks since mpi4py's scatter cannot take a size arg
+    chunks = [[] for _ in range(comm.Get_size())]
+    for e, chunk in enumerate(files):
+        chunks[e % comm.Get_size()].append(chunk)
 
-        logging.verbose("Rank {0} reported in, sending: {1}".format(child, f))
+    rc = comm.scatter(chunks)
+    results = {}
+    results = comm.gather(results, root=0)
 
-        # send filename to this rank
-        if child:
-            comm.send(f, dest=child)
+    for rank, r in enumerate(results):
+        logging.info("Rank: {}, Results: {}".format(rank, r))
 
-    # ran out of files to create. tell ranks we're done
-    i = 1
-    while i < num_ranks:
-        child = comm.recv(source=MPI.ANY_SOURCE)
-        comm.send('alldone', dest=child)
-        i += 1
-        
     return
 
 def slave(comm, options):
     rank = comm.Get_rank()
     done = False
 
-    while not done:
-        comm.send(rank, dest=0)
-        filename = comm.recv(source=0)
+    data = []
+    data = comm.scatter(data, root=0)
 
-        if filename == 'alldone':
-            done = True
-        else:
-            create_random_file(filename, options.size)
-            done = False
+    start_time = MPI.Wtime()
+    for d in data:
+        create_random_file(d, options.size)
+    elapsed = MPI.Wtime() - start_time
+    results = {'time': elapsed, 'num_created': len(data)}
+    results = comm.gather(results, root=0)
+    
     return
 
 if __name__ == '__main__':
