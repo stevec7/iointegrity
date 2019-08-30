@@ -78,7 +78,7 @@ class FileMD5(object):
         return None
 
     def create_md5(self, name):
-        with open(name, 'r') as f:
+        with open(name, 'rb') as f:
             md5sum = hashlib.md5(f.read()).hexdigest()
 
         return md5sum
