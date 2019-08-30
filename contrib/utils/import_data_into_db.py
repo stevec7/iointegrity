@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 import datetime
 import os
-import pickle
+import marshal
 import sqlite3 as sql
 import sys
 from optparse import OptionParser
@@ -29,7 +29,7 @@ def main(options, args):
 
     # 2.) block maps of each file
     for p in pairs:
-        m = pickle.marshal.dumps(bmd5.create_map(p[1]))
+        m = marshal.dumps(bmd5.create_map(p[1]))
         data.append((p[1], p[0], m, '', datestr))
 
     # 3.) on disk location of data

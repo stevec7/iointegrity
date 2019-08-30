@@ -7,13 +7,13 @@ import sys
 
 def load_map (name):
     f = open(name)
-    map = pickle.load(f)
+    mapd = pickle.load(f)
     f.close()
-    return map
+    return mapd
 
-def store_map(map, name):
+def store_map(mapd, name):
     f = open(name, 'w')
-    pickle.dump(map, f)
+    pickle.dump(mapd, f)
     f.close()
     return
 
@@ -22,17 +22,17 @@ def create_map(name):
     left = info.st_size
     fd = os.open(name, os.O_RDONLY)
     offset = 0
-    map = {}
+    mapd = {}
     while left > 0:
         buf = os.read(fd, info.st_blksize)
         left -= len(buf)
         h5 = hashlib.md5(buf)
-        map[offset] = h5.hexdigest()
+        mapd[offset] = h5.hexdigest()
         offset += len(buf)
     os.close(fd)
-    return map
+    return mapd
 
-def validate_map(name, map):
+def validate_map(name, mapd):
     info = os.stat(name)
     fd = os.open(name, os.O_RDONLY+os.O_DIRECT)
     left = info.st_size
@@ -41,8 +41,8 @@ def validate_map(name, map):
         buf = os.read(fd, info.st_blksize)
         left -= len(buf)
         h5 = hashlib.md5(buf)
-        if h5.hexdigest() != map[offset]:
-            print "failure: {0}".format(offset)
+        if h5.hexdigest() != mapd[offset]:
+            print("failure: {0}".format(offset))
         offset += len(buf)
     os.close(fd)
     return
@@ -61,12 +61,12 @@ def compare_block (offset, name1, name2):
     os.close(fd2)
     for i in range(0, info.st_blksize):
         if buf1[i] != buf2[i]:
-            print i, buf1[i], buf2[i]
+            print(i, buf1[i], buf2[i])
     
 def main(options, args):
     if options.createmap:
         if not options.verifymap:
-            print "If you are just creating a mapfile, you need to supply a file to create one with, via --verify"
+            print("If you are just creating a mapfile, you need to supply a file to create one with, via --verify")
             sys.exit(1)
 
         mapblob = create_map(options.verifymap)
@@ -83,8 +83,8 @@ def main(options, args):
     else:
         mapfile = options.readmap
 
-    map = load_map(mapfile)
-    validate_map(options.verifymap, map)
+    mapd = load_map(mapfile)
+    validate_map(options.verifymap, mapd)
     return
 
 if __name__ == '__main__':

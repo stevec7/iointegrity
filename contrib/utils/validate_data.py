@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 import datetime
 import logging
-import pickle
+import marshal
 from optparse import OptionParser
 from iointegrity.iotools import BlockMD5, FileMD5
 from iointegrity.dbtools import IOIntegrityDB
@@ -35,8 +35,8 @@ def main(options, args):
         if is_clean is not True:
             logging.debug("DEBUG: File '{0}' doesn't match md5sum in database".format(name))
             logging.debug("DEBUG: Doing block-level map check...")
-            map = pickle.marshal.loads(d['chunks'])
-            block_check = blk.validate_map(name, map)
+            mapd = marshal.loads(d['chunks'])
+            block_check = blk.validate_map(name, mapd)
             if block_check is not True:
                 logging.debug("DEBUG: Name, Offset, Map_md5, Current_md5")
                 for b in block_check[1]:

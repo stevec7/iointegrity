@@ -11,8 +11,8 @@ def main(options, args):
     md5sums = {}
             
     start_date = datetime.datetime.now()
-    print "*"*40
-    print "Starting another iteration at: {0}".format(start_date.isoformat())
+    print("*"*40)
+    print("Starting another iteration at: {0}".format(start_date.isoformat()))
 
     for line in f:
         k = line.split()[1]
@@ -28,8 +28,8 @@ def main(options, args):
             if s == md5sums[file]:
                 pass
             else:
-                print "{0} : File '{1}' checksum '{2}' does not match recorded checksum '{3}'".format(
-                        d.isoformat(), file, s, md5sums[file])
+                print("{0} : File '{1}' checksum '{2}' does not match recorded checksum '{3}'".format(
+                        d.isoformat(), file, s, md5sums[file]))
 
 
     
