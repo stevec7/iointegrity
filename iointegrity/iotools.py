@@ -25,8 +25,8 @@ class BlockMD5(object):
         os.close(fd2)
         for i in range(0, info.st_blksize):
             if buf1[i] != buf2[i]:
-                print "Mismatch at byte_num '{0}': {1}, {2}".format(
-                        i, buf1[i], buf2[i])
+                print("Mismatch at byte_num '{0}': {1}, {2}".format(
+                        i, buf1[i], buf2[i]))
         return
 
     def create_map(self, name):
@@ -36,17 +36,17 @@ class BlockMD5(object):
         left = info.st_size
         fd = os.open(name, os.O_RDONLY)
         offset = 0
-        map = {}
+        mapd = {}
         while left > 0:
             buf = os.read(fd, info.st_blksize)
             left -= len(buf)
             h5 = hashlib.md5(buf)
-            map[offset] = h5.hexdigest()
+            mapd[offset] = h5.hexdigest()
             offset += len(buf)
         os.close(fd)
-        return map
+        return mapd
 
-    def validate_map(self, name, map):
+    def validate_map(self, name, mapd):
         '''Compares the block md5sums to each block of the file'''
         failed = []
         info = os.stat(name)
@@ -60,8 +60,8 @@ class BlockMD5(object):
             left -= len(buf)
             h5 = hashlib.md5(buf)
             digest = h5.hexdigest()
-            if digest != map[offset]:
-                failed.append((offset, digest, map[offset]))
+            if digest != mapd[offset]:
+                failed.append((offset, digest, mapd[offset]))
             offset += len(buf)
         os.close(fd)
         if len(failed) > 0:
@@ -85,7 +85,7 @@ class FileMD5(object):
 
     def validate_md5(self, name, md5sum):
         logging.debug("DEBUG: FileMD5().validate_md5({0}, {1})".format(name, md5sum))
-        with open(name, 'r') as f:
+        with open(name, 'rb') as f:
             current_md5 = hashlib.md5(f.read()).hexdigest()
 
         if current_md5 != md5sum:
@@ -206,7 +206,7 @@ class FileTree(object):
                 filename = os.path.join(d, name)
                 result, err = self.write_file(filename)
                 if not result:
-                    print err
+                    print(err)
                     break
 
         return
@@ -263,8 +263,8 @@ class FileTree(object):
                         f.write(os.urandom(self.bufsize))
                         bytes_left -= self.bufsize
             except IOError as ioe:
-                print "IOError: {0}".format(ioe)
-                print "We bail on IO Errors..."
+                print("IOError: {0}".format(ioe))
+                print("We bail on IO Errors...")
                 sys.exit(1)
 
         return True, "Success"
@@ -278,14 +278,14 @@ def create_random_file(name, numbytes):
 
     # dont write the file if there isn't enough free space on the filesystem
     if numbytes > (vfsstats.f_ffree * vfsstats.f_bfree):
-        print "Not enough space to write data."
+        print("Not enough space to write data.")
         return
 
     bufsize = vfsstats.f_bsize
 
     if numbytes % bufsize != 0:
-        print "Number of bytes must be a multiple of blocksize ({0})".format(
-                bufsize)
+        print("Number of bytes must be a multiple of blocksize ({0})".format(
+                bufsize))
         return
 
     bytes_left = numbytes
