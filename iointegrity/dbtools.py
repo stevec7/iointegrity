@@ -1,10 +1,10 @@
 import datetime
 import hashlib
+import marshal
 import os
-import tempfile
-import pickle
 import sqlite3 as sql
 import sys
+import tempfile
 
 class IOIntegrityDB(object):
     '''The only function of this class is to send and retrieve
@@ -46,13 +46,13 @@ class IOIntegrityDB(object):
         query = 'SELECT {0} FROM {1} WHERE name=?'.format(attr, self.dbtable)
         self.sqlrun.execute(query, name)
         result = self.sqlrun.fetchone()
-        map = pickle.marshal.loads(result)
+        mapd = marshal.loads(result)
 
-        return map
+        return mapd
 
-    def write_blockmd5_to_db(self, name, map):
+    def write_blockmd5_to_db(self, name, mapd):
         '''Writes map data to the database'''
-        block_data = pickle.marshal.dumps(map)
+        block_data = marshal.dumps(mapd)
         date = datetime.datetime.now().isoformat()
         data = (name, block_data, date)
         self.sqlrun.execute('INSERT INTO blockmd5 VALUES(?, ?, ?)', data)
