@@ -1,10 +1,12 @@
 #!/usr/bin/env python
+import datetime
 import logging
 import os
 import sys
 from mpi4py import MPI
 from optparse import OptionParser
-from iointegrity.iotools import create_random_file
+from iointegrity.iotools import create_random_file, FileMD5
+from iointegrity.dbtools import IOIntegrityDB
 
 def main(options, args):
     comm = MPI.COMM_WORLD
@@ -22,6 +24,19 @@ def main(options, args):
     else:
         # secondary stuff
         slave(comm, options)
+
+    return
+
+def create(options, work):
+    fmd5 = FileMD5()
+    results = []
+
+    for w in work:
+        create_random_file(w, options.size)
+        md5sum = fmd5.create_md5(w)
+        results.append((w, md5sum))
+
+    return results
 
 def master(comm, options):
     '''rank 0 will handle the program setup, and distribute
@@ -44,26 +59,36 @@ def master(comm, options):
         chunks[e % comm.Get_size()].append(chunk)
 
     rc = comm.scatter(chunks)
-    results = {}
-    results = comm.gather(results, root=0)
+    results = create(options, rc)
 
+    # get results and add to a database
+    results = comm.gather(results, root=0)
+    db = IOIntegrityDB(options.dbfile)
+
+    mydate = datetime.datetime.now().isoformat()
+    to_insert = []
     for rank, r in enumerate(results):
-        logging.info("Rank: {}, Results: {}".format(rank, r))
+        logging.debug("Rank: {}, Results: {}".format(rank, r))
+        for i in r:
+            to_insert.append((i[0], i[1], '', '', mydate))
+
+    db.mass_insert_filemd5(to_insert)
+        
 
     return
 
 def slave(comm, options):
     rank = comm.Get_rank()
-    done = False
 
     data = []
+    results = []
     data = comm.scatter(data, root=0)
 
     start_time = MPI.Wtime()
-    for d in data:
-        create_random_file(d, options.size)
+    results = create(options, data)
     elapsed = MPI.Wtime() - start_time
-    results = {'time': elapsed, 'num_created': len(data)}
+
+    # these will be committed to a database
     results = comm.gather(results, root=0)
     
     return
@@ -74,6 +99,10 @@ if __name__ == '__main__':
                     dest='dir',
                     type='str',
                     help='full path to dir where files will be created.')
+    parser.add_option('-f', '--dbfile',
+                    dest='dbfile',
+                    type='str',
+                    help='full path to the database file.')
     parser.add_option('-n', '--numfiles',
                     dest='numfiles',
                     type='int',
